@@ -1,0 +1,191 @@
+" excerpt of vimrc for C LSP functionality
+
+" Turn on plugins and indenting
+filetype plugin indent on
+
+" Set wildmenu for partial file matches in file explorer tree
+set wildmenu
+set wildoptions=pum 
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" ALE {LINTER & FIXER & ERRORS/WARNINGS}
+"
+" https://github.com/dense-analysis/ale
+" https://github.com/rhysd/vim-lsp-ale
+
+" The LSP (below) and ALE are set to work together. Some of their features overlap.
+" ALE will handle linting, fixing, and errors/warnings
+" LSP will handle symbol navigation and autocomplete.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+let g:ale_enabled = 1 " Turn on the plugin
+let g:ale_completion_enabled = 1
+
+"  Set up Hover and Floating Preview in vim
+let g:ale_set_balloons=1
+let g:ale_hover_cursor=1
+let g:ale_floating_preview = 1
+    "let g:ale_floating_window_border = repeat([''], 8)
+let g:ale_floating_window_border = ['│', '─', '╭', '╮', '╯', '╰']
+let ale_virtualtext_cursor = 'disabled'
+
+let g:ale_fixers = { 'c': ['clang-format'] }
+let g:ale_fix_on_save = 0
+let g:ale_linters = { 'c': ['clangtidy'] }
+let g:ale_lint_on_save = 0
+    " Below is for if you only want to lint on save and no other time
+    "let g:ale_lint_on_text_changed = 'never'
+    "let g:ale_lint_on_insert_leave = 0 " 
+    "let g:ale_lint_on_enter = 0  " Run on opening a file?
+
+" C Language
+let g:ale_c_cc_executable = 'clang' 
+"let g:ale_c_cc_executable = 'gcc' 
+
+" Set flags for c compilers
+let c_opts = '-std=c11 -Wall -Wextra -fexceptions -DNDEBUG'
+let g:ale_c_cc_options    = c_opts
+let g:ale_c_gcc_options   = c_opts
+let g:ale_c_clang_options = c_opts
+
+
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" LANGUAGE SERVER PROTOCOL (LSP) {SYMBOL NAVIGATION & AUTOCOMPLETE}
+
+" https://github.com/prabirshrestha/vim-lsp
+" https://github.com/prabirshrestha/asyncomplete.vim
+" https://github.com/prabirshrestha/asyncomplete-lsp.vim
+"
+" The LSP and ALE (above) are set to work together. Some of their features overlap.
+" ALE will handle linting, fixing, and errors/warnings
+" LSP will handle symbol navigation and autocomplete.
+" 
+" The LSP uses a compile_commands.json database to operate. It can be thought of as a tags database a la ctags.
+" 
+" This setup below only conditionally uses language server keybindings  
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" General LSP Settings
+
+function! s:on_lsp_buffer_enabled() abort
+    " Disable ALE LSP for compat
+    " ALE - handles linting and formatting
+    " LSP - handles code semantics, code navigation
+    let g:ale_disable_lsp = 1
+
+    setlocal omnifunc=lsp#complete
+    setlocal signcolumn=yes
+    if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
+
+    " KEYBINDINGS
+    nmap <buffer> gd <plug>(lsp-definition)
+    nmap <buffer> gD <plug>(lsp-declaration)
+
+    " Think implementations/instances of a class
+    nmap <buffer> gi <plug>(lsp-implementation)
+
+    nmap <buffer> gt <plug>(lsp-type-definition)
+
+    " Where is this symbol used?
+    nmap <buffer> gu <plug>(lsp-call-hierarchy-incoming)
+
+    " What uses this symbol?
+    nmap <buffer> gU <plug>(lsp-call-hierarchy-outgoing)
+    
+    " What are all symbols in  file (with categories)?
+    nmap <buffer> gs <plug>(lsp-document-symbol-search)
+
+    " What are all symbols in codebase?
+    nmap <buffer> gS <plug>(lsp-workspace-symbol-search)
+
+    " All references to symbol in codebase
+    nmap <buffer> gr <plug>(lsp-references)
+
+
+    "nmap <buffer> <leader>rn <plug>(lsp-rename)
+
+    " Jump to next/prev error/warning
+    nmap <buffer> [g <plug>(lsp-previous-diagnostic)
+    nmap <buffer> ]g <plug>(lsp-next-diagnostic)
+
+    nmap <buffer> K <plug>(lsp-hover)
+
+    "" Scroll in popup menu with keyboard
+    "nnoremap <buffer> <expr><c-f> lsp#scroll(+4)
+    "nnoremap <buffer> <expr><c-d> lsp#scroll(-4)
+    
+
+    " AUTOCOMPLETE WITH LSP {asyncomplete plugin}
+    let g:asyncomplete_auto_popup = 0
+
+    "  Tab completion
+    function! s:check_back_space() abort
+        let col = col('.') - 1
+        return !col || getline('.')[col - 1]  =~ '\s'
+    endfunction
+
+    inoremap <silent><expr> <TAB>
+      \ pumvisible() ? "\<C-n>" :
+      \ <SID>check_back_space() ? "\<TAB>" :
+      \ asyncomplete#force_refresh()
+
+    inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
+
+    "  Enable Preview Window
+    " allow modifying the completeopt variable, or it will
+    " be overridden all the time
+    let g:asyncomplete_auto_completeopt = 0
+
+    set completeopt=menuone,noinsert,noselect,preview
+
+    "  Auto close preview window when done
+    autocmd! CompleteDone * if pumvisible() == 0 | pclose | endif
+
+
+endfunction
+
+augroup lsp_install
+    autocmd!
+    " call s:on_lsp_buffer_enabled only for languages that has the server registered.
+    autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
+augroup END
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" C LSP  Setup
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Configure vim-lsp to use C 
+" https://github.com/prabirshrestha/vim-lsp
+if executable('clangd')
+    augroup lsp_clangd
+        autocmd!
+        autocmd User lsp_setup call lsp#register_server({
+                    \ 'name': 'clangd',
+                    \ 'cmd': {server_info->['clangd']},
+                    \ 'allowlist': ['c', 'cpp', 'objc', 'objcpp'],
+                    \ })
+        autocmd FileType c setlocal omnifunc=lsp#complete
+        autocmd FileType cpp setlocal omnifunc=lsp#complete
+        autocmd FileType objc setlocal omnifunc=lsp#complete
+        autocmd FileType objcpp setlocal omnifunc=lsp#complete
+    augroup end
+endif
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" C Helper Functions
+" https://vim.fandom.com/wiki/Easily_switch_between_source_and_header_file
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! SwitchSourceHeader()
+  "update!
+  if (expand ("%:e") == "c")
+    find %:t:r.h
+  elseif (expand ("%:e") == "h")
+    find %:t:r.c
+  else
+    echom("") "Do nothing
+  endif
+endfunction
+
+nmap <leader>s :call SwitchSourceHeader()<CR>
